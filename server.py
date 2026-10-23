@@ -1,10 +1,7 @@
-#!/usr/bin/env python3
 # server.py - chat server for CS/CE 4390
 # run it: python3 server.py <port>
 #
 # one select() loop watches every socket at once so I never get stuck waiting on one person.
-# every connection gets a goob number in the log (goob 1, goob 2, ...) so I can tell who's who
-
 import select
 import socket
 import sys
@@ -15,13 +12,13 @@ ERR_INVALID_USERNAME = 1
 ERR_UNKNOWN_USER = 2
 ERR_INVALID_MESSAGE = 3
 
-clients = {}     # socket -> {"goob": number, "name": username or None, "buf": bytes that aren't a full line yet}
-users = {}       # username -> socket. dicts keep the order things got added, so this is also the join order for ACK
+clients = {}     # socket -> {"goob": number, "name": username or None, "buf": }
+users = {}       # username -> socket
 goob_count = 0
 
 
 def who(sock):
-    # "goob 3" or "goob 3 (alice)" for the log
+    # "goob 3" or "goob 3 (alice)" for log
     c = clients[sock]
     if c["name"]:
         return f"goob {c['goob']} ({c['name']})"
@@ -29,8 +26,7 @@ def who(sock):
 
 
 def send(sock, line):
-    # every protocol message ends in \n. if they're already gone just ignore it,
-    # select will tell me they left and I clean them up there
+    # every protocol message ends in \n and if they're already gone just ignore it, select will tell me they left and I clean them up there
     try:
         sock.sendall((line + "\n").encode())
     except OSError:
@@ -43,7 +39,7 @@ def err(sock, code):
 
 
 def ack(sock):
-    # ACK <#users> <userlist>
+    # ACK users userlist
     send(sock, "ACK " + " ".join([str(len(users))] + list(users)))
 
 
@@ -60,9 +56,9 @@ def handle_line(sock, line):
 
     if msg_type == "REG":
         if c["name"]:
-            err(sock, ERR_INVALID_MESSAGE)    # already registered, nice try. name stays the same
+            err(sock, ERR_INVALID_MESSAGE)    # already registered so name stays
         elif len(rest) < 1 or len(rest) > 32 or " " in rest:
-            err(sock, ERR_INVALID_USERNAME)   # spec: 1-32 chars, no spaces
+            err(sock, ERR_INVALID_USERNAME)   
         elif rest in users:
             err(sock, ERR_USERNAME_TAKEN)
         else:
@@ -91,7 +87,7 @@ def handle_line(sock, line):
 
     elif msg_type == "EXIT":
         if not c["name"] or rest:
-            err(sock, ERR_INVALID_MESSAGE)    # never registered (connection stays open), or junk after EXIT
+            err(sock, ERR_INVALID_MESSAGE)    # never registered, or junk after EXIT
         else:
             name = c["name"]
             del users[name]                   # off the list first
@@ -99,14 +95,14 @@ def handle_line(sock, line):
             print(f"goob {c['goob']} ({name}) sent EXIT")
             ack(sock)                         # ACK with the updated list
             broadcast(f"MSG SERVER {name} has left the chat")
-            # the client closes the connection after it gets the ACK
+            # client closes connection after ACK
 
     else:
-        err(sock, ERR_INVALID_MESSAGE)        # not a real message type
+        err(sock, ERR_INVALID_MESSAGE)        # not real message type
 
 
 def drop(sock):
-    # they disconnected. if they never sent EXIT I have to do the leave message for them
+    # they disconnected. if they never sent EXIT I do the message for them
     c = clients.pop(sock)
     sock.close()
     if c["name"]:
@@ -148,10 +144,10 @@ def main():
             except OSError:
                 data = b""
             if not data:
-                drop(sock)   # empty recv = they closed (EXIT then hang up, ctrl-c, crash, whatever)
+                drop(sock)   # close so EXIT then hang up, ctrl-c, crash, wahtever
                 continue
 
-            # TCP doesn't care about my message boundaries, so stash bytes and only
+            # stash bytes and only bc TCP don't matter
             # handle a message once its \n shows up. one recv could be half a message or 3 of them
             c = clients[sock]
             c["buf"] += data

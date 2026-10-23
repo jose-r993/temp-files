@@ -1,13 +1,3 @@
-#!/usr/bin/env python3
-# client.py - chat client for CS/CE 4390
-# run it: python3 client.py   (it asks for the host, port and username)
-#
-# once you're in, type:
-#   MESG <message>          send to everyone
-#   PMSG <user> <message>   send to one person
-#   LIST                    see who's online
-#   EXIT                    leave
-
 import select
 import socket
 import sys
@@ -33,7 +23,7 @@ def send(sock, line):
 
 
 def read_line(sock):
-    # wait until the server sends a whole line (TCP might give it to me in pieces)
+    # wait until the server sends a whole line (TCP gives in pieces sometimes)
     global buf
     while b"\n" not in buf:
         data = sock.recv(4096)
@@ -46,7 +36,7 @@ def read_line(sock):
 
 
 def handle_server_line(line):
-    # print whatever the server sent as-is, then deal with it
+    # print whatever the server sent as is then deal w it
     print(line)
     parts = line.split(" ")
 
@@ -80,7 +70,7 @@ def main():
         sys.exit(1)
     print(f"connected to {host} on port {port}")
 
-    # keep trying usernames until the server takes one. the server does all the checking, not me
+    # keep trying usernames until the server takes one n the server will handle it
     name = input("username: ")
     while True:
         send(sock, "REG " + name)
@@ -94,14 +84,14 @@ def main():
     users = reply.split(" ")[2:]   # "ACK 2 alice bob" -> ["alice", "bob"]
     print("registered! commands: MESG <message>, PMSG <user> <message>, LIST, EXIT")
 
-    # main loop: select() wakes me up when I type something OR the server sends something
+    # select() wakes me up when I type something OR the server sends something
     while True:
         readable, _, _ = select.select([sock, sys.stdin], [], [])
 
         if sys.stdin in readable:
             text = sys.stdin.readline()
             if not text:
-                # ctrl-d, leave properly and wait for the ACK
+                # leave n wait for the ACK
                 send(sock, "EXIT")
                 while True:
                     handle_server_line(read_line(sock))
@@ -109,7 +99,7 @@ def main():
             if text == "LIST":
                 print(f"{len(users)} user(s) in the chat: {' '.join(users)}")
             elif text:
-                send(sock, text)   # MESG / PMSG / EXIT go straight to the server, it checks them
+                send(sock, text)   # MESG / PMSG / EXIT go to server for checking
 
         if sock in readable:
             data = sock.recv(4096)
@@ -126,5 +116,5 @@ if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        # ctrl-c = just vanish without EXIT (good for showing the server catch it)
+        # dip without EXIT 
         print()
